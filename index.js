@@ -1,37 +1,102 @@
-//for importing express module
-//import express module
-const express=require('express')
-const app=express()
+const express = require('express');
+const mongodb = require('mongodb');
+
+const app = express();
+const MongoClient = mongodb.MongoClient;
+
+const dbUrl = 'mongodb+srv://demoprojet:demoproject@cluster0.pj2dg.mongodb.net/'
+const dbName = 'amity';
+
 app.use(express.json());
-let item=[ ];
 
-//get all user
-app.get('/user',(req,res)=>{
-    res.json(users)
-})
+let client;
 
-//post - new user
-app.post('/users',(req,res)=>{
+// Intialize mongoDB connection Once
+async function connectDB() {
+    if (!client){
+        client = await MangoClient.connect(dbUrl1);
+        console.log('Connected to Mangodb')
+    }
+    return client.db(dbName);
+}
 
-    const newuser={id:users.lenght+1, ...req.body}
-    users.push(newuser)
-    res.status(201),json(newuser);
-})
+// Get All Users
+app.get('/', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const users = await db.collection('userDetails').find().toArray();
+        res.json({ message: 'Displaying all records', users });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
-//update --put()
-app.put('/user/:id',(req,res)=>{
-    const user=users.find(u=>u.id===parseInt(req.params.id))
-    if(!user) return res.status(404).json({message:"user not found"})
-        user.name=req.body.name || req.name
-    user.email=req.body.email || req.email
-    res.json(user)
-})
+// Insert New Record
+app.post('/', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const result = await db.collection('userDetails').insertOne(req.body);
+        res.json({ message: 'Record Inserted', insertedId: result.insertedId });
+    } catch (error){
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 
-//delete
-app.delete('/users:id',(req,res)=>{
-    users=users.filter(user=>user.id !==parseInt(req,params.id))
-res.json({message:'user deleted'})
-})
-app.listen(8000,()=>console.log("server is running in the port 8000"))
+// Fetch User by ID
+app.get('/fetch/:id', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const id = parseInt(req.params.id);
+        const user = await db.collection('userDetails').findOne({ id });
 
-    
+        if (user) {
+            res.json({ message: 'Record Found', user });
+        } else {
+            res.status(404).json({ message: 'Record Not Found' });
+        }
+    } catch (error){
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+// Update User by Name
+app.put('/update/:name', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const name = req.params.name;
+        const updatedData = { $set: req.body };
+        const result = await db.collection('userDetails').updateOne({ name }, updatedData);
+
+        if (result.modifiedCount > 0) {
+            res.json({ message: 'Record Updated' });
+        } else{
+            res.status(404).json({ message: 'Record Not Found or No Change Made' });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+// Delete User by Name
+app.delete('/delete/:name', async (req, res) => {
+    try {
+        const db = await connectDB();
+        const name = req.params.name;
+        const result = await db.collection('userDetails').deleteOne({ name });
+
+        if (result.deletedCount > 0) {
+            res.json({message: 'Record Deleted'});
+        } else {
+            res.status(404).json({ message: 'Record Not Found' });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+app.listen(8000, () => console.log('Server is running on port 8000'));
