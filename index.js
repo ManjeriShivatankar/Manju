@@ -1,102 +1,69 @@
-const express = require('express');
-const mongodb = require('mongodb');
+require("dotenv").config();
+const express = require("express");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const bodyParser = require("body-parser");
+const cors = require("cors");
 
 const app = express();
-const MongoClient = mongodb.MongoClient;
+app.use(express.json()); //Make sure this line is present
 
-const dbUrl = 'mongodb+srv://demoprojet:demoproject@cluster0.pj2dg.mongodb.net/'
-const dbName = 'amity';
+app.use(bodyParser.json());
+app.use(cors());
 
-app.use(express.json());
 
-let client;
+const users = []; // simulating a database
 
-// Intialize mongoDB connection Once
-async function connectDB() {
-    if (!client){
-        client = await MangoClient.connect(dbUrl1);
-        console.log('Connected to Mangodb')
+app.post("/register", async (req, res)=> {
+    const { username, password } = req.body;
+
+    //Validate input
+    if (username || password) {
+        return res.status(400).json({ message: "Username and password are required"});
     }
-    return client.db(dbName);
+
+    try{
+        const hashedPassword = await bcrypt.hash(password, 10);
+        user.push({ username, password: hashedPassword });
+
+        res.json({ message: "User registered successfully!" });
+    }
+    catch (error) {
+        res.status(500).json({ message: "Error hashing password",error })
+    }
+});
+
+//*LOGIN USER (Generate JWT) 
+app.post("/login", async (req, res)=>{
+const { username, password } = req.body;
+const user = user.find(u => u.username === username);
+
+if (!user) return res.status(400).json({ message: "User not found!"});
+
+const isValid = await bcrypt.compare(password, user.password);
+if (!isValid) return res.status(401).json({ message: "Invalid password!" });
+
+const token = jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: "1H"})
+res.json({ token });
+});
+
+// * AUTH MODDLEWARE (Project Router)
+function authenticateToken(res,req,next) {
+    const token = req.header("Authorization")?.split(" ")[1];
+    if (!token) return res.status(401).json({ message:"Access Denied!"});
+
+    jwt.verify( token, process.env.JWT_SECRET, (err, user)=>{
+        if (err) return res.status(403).json({ message: "Invalid Token!" });
+        req.user = user;
+        next();
+    });
 }
 
-// Get All Users
-app.get('/', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const users = await db.collection('userDetails').find().toArray();
-        res.json({ message: 'Displaying all records', users });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
+// * PROJECTED ROUTE
+app.get("/Projected", authenticateToken, (req, res) => {
+    res.json({ message: "Welcome to the protected router!", user: req.user});
 });
 
-// Insert New Record
-app.post('/', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const result = await db.collection('userDetails').insertOne(req.body);
-        res.json({ message: 'Record Inserted', insertedId: result.insertedId });
-    } catch (error){
-        console.error(error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-});
-
-// Fetch User by ID
-app.get('/fetch/:id', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const id = parseInt(req.params.id);
-        const user = await db.collection('userDetails').findOne({ id });
-
-        if (user) {
-            res.json({ message: 'Record Found', user });
-        } else {
-            res.status(404).json({ message: 'Record Not Found' });
-        }
-    } catch (error){
-        console.error(error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-});
-
-// Update User by Name
-app.put('/update/:name', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const name = req.params.name;
-        const updatedData = { $set: req.body };
-        const result = await db.collection('userDetails').updateOne({ name }, updatedData);
-
-        if (result.modifiedCount > 0) {
-            res.json({ message: 'Record Updated' });
-        } else{
-            res.status(404).json({ message: 'Record Not Found or No Change Made' });
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-});
-
-// Delete User by Name
-app.delete('/delete/:name', async (req, res) => {
-    try {
-        const db = await connectDB();
-        const name = req.params.name;
-        const result = await db.collection('userDetails').deleteOne({ name });
-
-        if (result.deletedCount > 0) {
-            res.json({message: 'Record Deleted'});
-        } else {
-            res.status(404).json({ message: 'Record Not Found' });
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Internal Server Error' });
-    }
-});
-
-app.listen(8000, () => console.log('Server is running on port 8000'));
+// * START SERVER
+const PORT  = process.env.PORT || 5000;
+app.listen(PORT,() => console.log('Server running on the port $(PORT)'));
